@@ -23,7 +23,7 @@
 
 <body class="bg-gray-100 font-sans">
 
-    <!-- Toast container for non-blocking notifications -->
+    <!-- Toast Notification Container -->
     <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
 
     <!-- LOGIN & REGISTER SCREEN -->
@@ -41,7 +41,8 @@
                     <label class="block text-xs font-bold text-gray-600 mb-1">Username</label>
                     <input id="loginUsername"
                            class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                           placeholder="Enter your username" />
+                           placeholder="Enter your username" 
+                           autocomplete="username" />
                 </div>
 
                 <div>
@@ -49,7 +50,8 @@
                     <input id="loginPassword"
                            type="password"
                            class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                           placeholder="••••••••" />
+                           placeholder="••••••••" 
+                           autocomplete="current-password" />
                 </div>
 
                 <button onclick="login()"
@@ -77,7 +79,8 @@
                     <label class="block text-xs font-bold text-gray-600 mb-1">Choose Unique Username</label>
                     <input id="regUsername"
                            class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                           placeholder="e.g. ali_waiter or usman_cashier" />
+                           placeholder="e.g. ali_waiter or usman_cashier" 
+                           autocomplete="off" />
                 </div>
 
                 <div>
@@ -85,7 +88,8 @@
                     <input id="regPassword"
                            type="password"
                            class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                           placeholder="••••••••" />
+                           placeholder="••••••••" 
+                           autocomplete="new-password" />
                 </div>
 
                 <div>
@@ -138,25 +142,6 @@
                 </button>
             </div>
         </header>
-
-        <!-- TABLE-SIDE WAITER MODE VIEW -->
-        <div id="waiterModeView" class="hidden p-4 container mx-auto flex-1">
-            <div class="bg-white rounded-xl shadow p-4 mb-4 border border-blue-200 bg-blue-50/50 flex flex-wrap justify-between items-center gap-2">
-                <div>
-                    <h2 class="font-bold text-gray-800 text-base">🧑‍🍳 Mobile Table-Side Station</h2>
-                    <p class="text-xs text-gray-500">Tap a table to assign yourself and build live orders</p>
-                </div>
-                <div id="waiterActiveTableBadge" class="text-xs font-bold bg-indigo-600 text-white px-3 py-1.5 rounded-lg hidden">
-                    Active Table: <span id="waiterActiveTableNum">-</span>
-                </div>
-            </div>
-
-            <!-- Tables Grid for Waiter -->
-            <div class="mb-6">
-                <h3 class="text-sm font-bold text-gray-700 mb-2">Select Active Table:</h3>
-                <div id="waiterTablesGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
-            </div>
-        </div>
 
         <!-- MAIN POS COUNTER PANEL -->
         <div id="mainPosView" class="container mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
@@ -519,8 +504,8 @@
         <div class="bg-white rounded-xl p-6 w-full max-w-xs shadow-2xl space-y-4">
             <h3 class="text-base font-bold text-gray-800 text-center">Unlock Quick Stock Panel</h3>
             <p class="text-xs text-gray-500 text-center">Enter PIN to quickly update quantities</p>
-            <input id="stockPinInput" type="password" placeholder="PIN (Default: 1234)" class="w-full p-2 border rounded text-center font-bold text-sm bg-gray-50" />
-            <p id="stockPinError" class="hidden text-xs text-red-600 font-bold text-center">Invalid PIN! Try 1234.</p>
+            <input id="stockPinInput" type="password" placeholder="PIN" class="w-full p-2 border rounded text-center font-bold text-sm bg-gray-50" />
+            <p id="stockPinError" class="hidden text-xs text-red-600 font-bold text-center">Invalid PIN! Try again.</p>
             <div class="flex gap-2">
                 <button onclick="closeStockPinModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold text-xs hover:bg-gray-300">Cancel</button>
                 <button onclick="submitStockPin()" class="flex-1 bg-amber-600 text-white py-2 rounded font-bold text-xs hover:bg-amber-700">Unlock</button>
@@ -528,12 +513,12 @@
         </div>
     </div>
 
-    <!-- OWNER AUTH PIN MODAL (for restricted actions like editing a printed bill) -->
+    <!-- OWNER AUTH PIN MODAL -->
     <div id="ownerAuthModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[60] p-4">
         <div class="bg-white rounded-xl p-6 w-full max-w-xs shadow-2xl space-y-4">
             <h3 class="text-base font-bold text-gray-800 text-center">Owner PIN Required</h3>
-            <p class="text-xs text-gray-500 text-center">Enter owner PIN to authorize editing this order.</p>
-            <input id="ownerAuthPinInput" type="password" placeholder="Owner PIN (Default: 1234)" class="w-full p-2 border rounded text-center font-bold text-sm bg-gray-50" />
+            <p class="text-xs text-gray-500 text-center">Enter owner PIN to authorize this action.</p>
+            <input id="ownerAuthPinInput" type="password" placeholder="Owner PIN" class="w-full p-2 border rounded text-center font-bold text-sm bg-gray-50" />
             <p id="ownerAuthError" class="hidden text-xs text-red-600 font-bold text-center">Invalid PIN.</p>
             <div class="flex gap-2">
                 <button onclick="closeOwnerAuthModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold text-xs hover:bg-gray-300">Cancel</button>
@@ -555,9 +540,9 @@
                     <h4 class="text-xs font-bold text-gray-700">Add New Ingredient</h4>
                     <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
                         <input id="newItemName" type="text" placeholder="Item Name (e.g. Chicken)" class="p-2 border rounded text-xs" />
-                        <input id="newItemStock" type="number" step="0.01" placeholder="Initial Stock" class="p-2 border rounded text-xs" />
+                        <input id="newItemStock" type="number" step="0.01" min="0" placeholder="Initial Stock" class="p-2 border rounded text-xs" />
                         <input id="newItemUnit" type="text" placeholder="Unit (kg, pcs)" class="p-2 border rounded text-xs" />
-                        <input id="newItemCost" type="number" step="0.01" placeholder="Cost per Unit (e.g. 200.00)" class="p-2 border rounded text-xs" />
+                        <input id="newItemCost" type="number" step="0.01" min="0" placeholder="Cost per Unit" class="p-2 border rounded text-xs" />
                         <button onclick="addNewInventoryItem()" class="bg-amber-600 text-white text-xs font-bold rounded p-2 hover:bg-amber-700">+ Add Ingredient</button>
                     </div>
                 </div>
@@ -604,7 +589,7 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <input id="foodName" type="text" placeholder="Dish Name (e.g. Zinger Burger)" class="p-2 border rounded text-xs" />
-                        <input id="foodPrice" type="number" step="0.01" placeholder="Price (Rs)" class="p-2 border rounded text-xs" />
+                        <input id="foodPrice" type="number" step="0.01" min="0" placeholder="Price (Rs)" class="p-2 border rounded text-xs" />
                         <select id="foodCategorySelect" class="p-2 border rounded text-xs bg-white"></select>
                     </div>
 
@@ -640,7 +625,7 @@
                     <div id="ownerFoodList" class="space-y-2"></div>
                 </div>
 
-                <!-- New: Change Owner PIN Section -->
+                <!-- Change Owner PIN Section -->
                 <div class="bg-white p-4 rounded-xl border space-y-3">
                     <h4 class="text-xs font-bold text-gray-700">3. Change Owner PIN (Requires Owner Password)</h4>
                     <p class="text-xs text-gray-500">To change the Owner PIN used across the system (stock unlocking / edits), confirm your account password first.</p>

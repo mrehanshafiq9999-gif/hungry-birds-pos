@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hungry Birds Restaurant POS</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+
+    <!-- PDF Generation Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- Firebase Web SDK (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <!-- bcryptjs for browser password hashing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"></script>
+</head>
+
+<body class="bg-gray-100 font-sans">
+
+    <!-- Toast container for non-blocking notifications -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- LOGIN & REGISTER SCREEN -->
+    <div id="loginScreen" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl p-8 w-full max-w-md shadow-xl relative">
+
+            <h2 class="text-2xl font-bold mb-1 text-center text-gray-800">
+                Hungry Birds POS
+            </h2>
+            <p class="text-xs text-center text-gray-500 mb-6">Enter your credentials to access your workspace</p>
+
+            <!-- LOGIN FORM -->
+            <div id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Username</label>
+                    <input id="loginUsername"
+                           class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="Enter your username" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Password</label>
+                    <input id="loginPassword"
+                           type="password"
+                           class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="••••••••" />
+                </div>
+
+                <button onclick="login()"
+                        class="bg-indigo-600 text-white w-full p-3 rounded-lg font-bold hover:bg-indigo-700 transition shadow">
+                    Login to System
+                </button>
+
+                <div class="text-center pt-2">
+                    <p class="text-xs text-gray-600">
+                        New staff member or owner?
+                        <button type="button" onclick="toggleAuthMode('REGISTER')" class="text-indigo-600 font-bold hover:underline">
+                            Sign Up Here
+                        </button>
+                    </p>
+                </div>
+            </div>
+
+            <!-- SIGN UP FORM -->
+            <div id="registerForm" class="hidden space-y-4">
+                <div class="bg-indigo-50 p-3 rounded-lg text-xs text-indigo-800 border border-indigo-200 mb-2">
+                     Create a new staff account. Permissions are assigned automatically based on selected role.
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Choose Unique Username</label>
+                    <input id="regUsername"
+                           class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="e.g. ali_waiter or usman_cashier" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Set Password</label>
+                    <input id="regPassword"
+                           type="password"
+                           class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="••••••••" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Select Account Type / Role</label>
+                    <select id="regRole" class="border p-3 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                        <option value="WAITER">🧑‍🍳 Employee - Waiter (Table-side Ordering)</option>
+                        <option value="CASHIER">💳 Employee - Cashier (Main Counter POS)</option>
+                        <option value="MANAGER">👔 Employee - Manager (Stock & Ops)</option>
+                        <option value="OWNER">👑 Owner (Full System & Admin Access)</option>
+                    </select>
+                </div>
+
+                <button onclick="signUp()"
+                        class="bg-emerald-600 text-white w-full p-3 rounded-lg font-bold hover:bg-emerald-700 transition shadow">
+                    Create Account & Login
+                </button>
+
+                <div class="text-center pt-2">
+                    <p class="text-xs text-gray-600">
+                        Already have an account?
+                        <button type="button" onclick="toggleAuthMode('LOGIN')" class="text-indigo-600 font-bold hover:underline">
+                            Back to Login
+                        </button>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MAIN APP SCREEN -->
+    <div id="posScreen" class="hidden min-h-screen flex flex-col">
+
+        <!-- TOP BAR / EMPLOYEE HEADER -->
+        <header class="bg-indigo-900 text-white p-3 shadow-md flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <h1 class="text-lg font-bold">🦅 Hungry Birds Restaurant</h1>
+                <span id="roleBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-700 font-mono font-bold"></span>
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+                <button data-role="OWNER" onclick="openShiftOpeningModal()" class="bg-emerald-500 hover:bg-emerald-600 px-3 py-1 rounded text-xs font-bold text-white transition flex items-center gap-1 shadow">
+                    💵 Opening Cash
+                </button>
+                <button data-role="OWNER,MANAGER" onclick="openShiftCloseModal()" class="bg-amber-500 hover:bg-amber-600 px-3 py-1 rounded text-xs font-bold text-gray-900 transition flex items-center gap-1 shadow">
+                    📊 Shift Report & Close
+                </button>
+                <span class="hidden sm:inline text-indigo-200">Logged in as: <strong id="loggedUserName" class="text-white"></strong></span>
+                <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-xs font-bold transition">
+                    Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- TABLE-SIDE WAITER MODE VIEW -->
+        <div id="waiterModeView" class="hidden p-4 container mx-auto flex-1">
+            <div class="bg-white rounded-xl shadow p-4 mb-4 border border-blue-200 bg-blue-50/50 flex flex-wrap justify-between items-center gap-2">
+                <div>
+                    <h2 class="font-bold text-gray-800 text-base">🧑‍🍳 Mobile Table-Side Station</h2>
+                    <p class="text-xs text-gray-500">Tap a table to assign yourself and build live orders</p>
+                </div>
+                <div id="waiterActiveTableBadge" class="text-xs font-bold bg-indigo-600 text-white px-3 py-1.5 rounded-lg hidden">
+                    Active Table: <span id="waiterActiveTableNum">-</span>
+                </div>
+            </div>
+
+            <!-- Tables Grid for Waiter -->
+            <div class="mb-6">
+                <h3 class="text-sm font-bold text-gray-700 mb-2">Select Active Table:</h3>
+                <div id="waiterTablesGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3"></div>
+            </div>
+        </div>
+
+        <!-- MAIN POS COUNTER PANEL -->
+        <div id="mainPosView" class="container mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
+
+            <!-- LEFT PANEL: Menu & Order Cart -->
+            <div class="md:col-span-2 space-y-4">
+                <!-- Navigation & Quick Tools -->
+                <div class="bg-white p-4 rounded-xl shadow-sm flex flex-wrap justify-between items-center gap-2">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-lg font-bold text-gray-800">COUNTER</h2>
+                        <span id="activeTableIndicator" class="text-xs bg-indigo-100 text-indigo-800 font-bold px-2 py-1 rounded hidden"></span>
+                    </div>
+
+                    <div class="flex-1 max-w-xs mx-2">
+                        <input id="menuSearch" type="text" placeholder="🔍 Search menu items..." class="w-full p-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50" />
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <button data-role="OWNER" onclick="openSalesAnalyticsModal()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-700 transition flex items-center gap-1 shadow">
+                            📈 Owner Analytics
+                        </button>
+                        <button onclick="openHeldOrdersModal()" class="bg-orange-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-orange-700 transition flex items-center gap-1">
+                            ⏸️ Held Orders <span id="heldOrdersBadge" class="bg-white text-orange-700 font-extrabold px-1.5 py-0.5 rounded-full text-[10px]">0</span>
+                        </button>
+                        <button onclick="openDeliveryManagementModal()" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 transition flex items-center gap-1">
+                            🛵 Delivery Management
+                        </button>
+                        <button data-role="OWNER,MANAGER" onclick="protectedOpenInventoryModal()" class="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-amber-700 transition">
+                            📦 Raw Stock
+                        </button>
+                        <button data-role="OWNER" onclick="authenticateOwner()" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-purple-700 transition">
+                            👑 Owner Admin
+                        </button>
+                        <button id="connectPrinterBtn" onclick="connectPrinter()" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-indigo-700 transition">
+                            Connect Printer
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Food Categories Toggle -->
+                <div class="bg-white p-4 rounded-xl shadow-sm">
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wide text-gray-600">Food Categories</h3>
+                    </div>
+                    <div class="flex gap-2 overflow-x-auto pb-1" id="categoryFilterBar"></div>
+                </div>
+
+                <!-- Menu Grid -->
+                <div class="bg-white p-4 rounded-xl shadow-sm">
+                    <h3 class="text-md font-semibold mb-3 text-gray-700">Menu Items</h3>
+                    <div id="menuContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+                </div>
+
+                <!-- Order Cart -->
+                <div class="bg-white p-4 rounded-xl shadow-sm">
+                    <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
+                        <h3 class="text-md font-semibold text-gray-700">Current Order Cart</h3>
+
+                        <div class="flex bg-gray-100 p-1 rounded-lg border text-xs font-bold gap-1">
+                            <button id="btnDineIn" onclick="setOrderType('DINE_IN')" class="px-3 py-1.5 rounded-md bg-indigo-600 text-white transition">
+                                🍽️ Dine In
+                            </button>
+                            <button id="btnTakeaway" onclick="setOrderType('TAKEAWAY')" class="px-3 py-1.5 rounded-md text-gray-600 hover:text-indigo-600 transition">
+                                🛍️ Takeaway
+                            </button>
+                            <button id="btnDelivery" onclick="setOrderType('DELIVERY')" class="px-3 py-1.5 rounded-md text-gray-600 hover:text-indigo-600 transition">
+                                🛵 Delivery
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Delivery Details Panel -->
+                    <div id="deliveryInfoBox" class="hidden mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2 text-xs">
+                        <div class="font-bold text-blue-900 flex justify-between items-center">
+                            <span>🛵 Delivery Details <span class="text-[10px] text-red-600 font-semibold">(Min Order: Rs 500)</span></span>
+                            <button onclick="clearDeliveryDetails()" class="text-gray-400 hover:text-red-500 font-normal">Clear</button>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input id="deliveryCustomerName" type="text" placeholder="Customer Name" class="p-2 border rounded bg-white" />
+                            <input id="deliveryCustomerPhone" type="text" placeholder="Phone Number" class="p-2 border rounded bg-white" />
+                        </div>
+                        <input id="deliveryAddress" type="text" placeholder="Delivery Address / Landmark" class="w-full p-2 border rounded bg-white" />
+                    </div>
+
+                    <div id="cartItems" class="space-y-2 mb-4 min-h-[60px]"></div>
+
+                    <div class="border-t pt-3 space-y-2">
+                        <div class="flex justify-between items-center text-sm text-gray-600">
+                            <span>Subtotal:</span>
+                            <span id="cartSubtotal" class="font-semibold text-gray-800">Rs 0.00</span>
+                        </div>
+
+                        <div class="flex justify-between items-center gap-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                            <label for="discountInput" class="text-xs font-bold text-amber-900 flex items-center gap-1">
+                                🏷️ Discount (%):
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <input id="discountInput" type="number" min="0" max="100" placeholder="0" value="0"
+                                       oninput="updateDiscount(this.value)"
+                                       class="w-20 p-1.5 text-right font-bold text-sm border border-amber-300 rounded focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white">
+                                <span class="text-xs font-bold text-amber-900">%</span>
+                            </div>
+                        </div>
+
+                        <div id="discountAmountRow" class="hidden flex justify-between items-center text-xs text-red-600 font-medium">
+                            <span>Discount Amount:</span>
+                            <span id="cartDiscountAmount">-Rs 0.00</span>
+                        </div>
+
+                        <div class="flex justify-between items-center font-bold text-xl text-gray-800 border-t pt-2">
+                            <span>Grand Total:</span>
+                            <span id="cartTotal" class="text-emerald-700">Rs 0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-4">
+                        <button onclick="holdCurrentOrder()" class="sm:col-span-1 bg-amber-500 text-gray-900 py-3 rounded-lg font-bold hover:bg-amber-600 transition flex items-center justify-center gap-1 shadow">
+                            <span>⏸️ Hold</span>
+                        </button>
+                        <button id="checkoutBtn" onclick="processSale()" class="sm:col-span-3 bg-emerald-600 text-white py-3 rounded-lg font-bold hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow">
+                            <span>Complete Sale & Print Receipt</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: Tables Control & Live Stock -->
+            <div class="space-y-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-md font-semibold text-gray-700">Live Raw Stock</h3>
+                        <div class="flex items-center gap-2">
+                            <button id="lockStockBtn" onclick="lockStockView()" class="hidden text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold hover:bg-red-200 transition">
+                                🔒 Lock
+                            </button>
+                            <button data-role="OWNER,MANAGER" onclick="protectedOpenInventoryModal()" class="text-xs text-amber-600 font-bold underline">Manage All</button>
+                        </div>
+                    </div>
+
+                    <div id="stockLockedState" class="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 space-y-3">
+                        <div class="text-3xl">🔒</div>
+                        <p class="text-xs font-semibold text-gray-500">Stock PIN Protected</p>
+                        <button onclick="promptStockPin()" class="bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-amber-700 transition shadow-sm">
+                            Enter Owner PIN
+                        </button>
+                    </div>
+
+                    <div id="stockUnlockedState" class="hidden">
+                        <div id="inventoryContainer" class="space-y-2 text-sm max-h-60 overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+
+                <!-- Recent Sales & Receipt Management -->
+                <div class="bg-white p-4 rounded-xl shadow-sm">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-md font-semibold text-gray-700">Recent Sales History</h3>
+                        <span class="text-[10px] text-gray-400 font-bold">Live Auto-Update</span>
+                    </div>
+
+                    <!-- BULK SELECTION TOOLBAR -->
+                    <div class="flex justify-between items-center bg-gray-50 p-2 rounded-lg mb-3 border text-xs">
+                        <label class="flex items-center gap-1.5 font-bold text-gray-700 cursor-pointer">
+                            <input type="checkbox" id="selectAllSalesCheckbox" onchange="toggleSelectAllSales(this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                            <span>Select All</span>
+                        </label>
+                        <button id="bulkDeleteBtn" onclick="deleteSelectedSales()" data-role="OWNER,MANAGER" class="hidden text-xs bg-red-600 text-white font-bold px-2.5 py-1 rounded hover:bg-red-700 transition items-center gap-1 shadow">
+                            🗑️ Delete Selected (<span id="selectedSalesCount">0</span>)
+                        </button>
+                    </div>
+
+                    <div id="salesContainer" class="space-y-3 text-sm max-h-72 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OWNER SALES ANALYTICS MODAL -->
+    <div id="salesAnalyticsModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b bg-emerald-700 text-white flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">📈</span>
+                    <h3 class="text-base font-bold">Owner Sales Analytics Summary</h3>
+                </div>
+                <button onclick="closeSalesAnalyticsModal()" class="text-emerald-200 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div class="p-5 space-y-4 overflow-y-auto flex-1 bg-gray-50">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-emerald-100 shadow-sm space-y-1">
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wide">Today's Total Sales</div>
+                        <div id="analyticsTodaySales" class="text-2xl font-extrabold text-emerald-700">Rs 0.00</div>
+                        <div id="analyticsTodayCount" class="text-[11px] text-gray-400">0 orders today</div>
+                        <div id="analyticsTodayDiscounts" class="text-[11px] text-red-600 font-semibold">Discounts given: Rs 0.00</div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm space-y-1">
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wide">This Week's Sales</div>
+                        <div id="analyticsWeekSales" class="text-2xl font-extrabold text-indigo-700">Rs 0.00</div>
+                        <div id="analyticsWeekCount" class="text-[11px] text-gray-400">0 orders this week</div>
+                        <div id="analyticsWeekDiscounts" class="text-[11px] text-red-600 font-semibold">Discounts given: Rs 0.00</div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-purple-100 shadow-sm space-y-1">
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wide">This Month's Sales</div>
+                        <div id="analyticsMonthSales" class="text-2xl font-extrabold text-purple-700">Rs 0.00</div>
+                        <div id="analyticsMonthCount" class="text-[11px] text-gray-400">0 orders this month</div>
+                        <div id="analyticsMonthDiscounts" class="text-[11px] text-red-600 font-semibold">Discounts given: Rs 0.00</div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-amber-100 shadow-sm space-y-1">
+                        <div class="text-xs font-bold text-gray-500 uppercase tracking-wide">Total Overall Revenue</div>
+                        <div id="analyticsOverallSales" class="text-2xl font-extrabold text-amber-700">Rs 0.00</div>
+                        <div id="analyticsOverallCount" class="text-[11px] text-gray-400">0 overall orders</div>
+                        <div id="analyticsOverallDiscounts" class="text-[11px] text-red-600 font-semibold">Total discounts given: Rs 0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-3 bg-gray-100 border-t text-right">
+                <button onclick="closeSalesAnalyticsModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400">
+                    Close Analytics
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HELD ORDERS MODAL -->
+    <div id="heldOrdersModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b bg-orange-600 text-white flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">⏸️</span>
+                    <h3 class="text-base font-bold">Held Orders Management</h3>
+                </div>
+                <button onclick="closeHeldOrdersModal()" class="text-orange-200 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div class="p-4 space-y-3 overflow-y-auto flex-1">
+                <p class="text-xs text-gray-500">Select an order to restore it back into your active cart for checkout, or discard it.</p>
+                <div id="heldOrdersList" class="space-y-3"></div>
+            </div>
+
+            <div class="p-3 bg-gray-50 border-t text-right">
+                <button onclick="closeHeldOrdersModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SHIFT OPENING CASH MODAL -->
+    <div id="shiftOpeningModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div class="p-4 border-b bg-emerald-700 text-white flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">💵</span>
+                    <h3 class="text-base font-bold">Opening Cash</h3>
+                </div>
+                <button onclick="closeShiftOpeningModal()" class="text-emerald-100 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div class="p-5 space-y-4 bg-gray-50">
+                <div>
+                    <label for="openingCashInput" class="block text-xs font-bold text-gray-700 mb-2">Cash in drawer when the shift starts</label>
+                    <input id="openingCashInput" type="number" min="0" step="0.01" value="0" class="w-full border p-3 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="0.00" />
+                </div>
+                <div class="text-xs text-gray-500">This amount is included in the shift summary and helps track the expected drawer balance.</div>
+            </div>
+
+            <div class="p-3 bg-gray-100 border-t flex justify-between items-center">
+                <button onclick="closeShiftOpeningModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button onclick="saveOpeningCash()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700 transition">
+                    Save Opening Cash
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SHIFT CLOSING & REPORT MODAL -->
+    <div id="shiftReportModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b bg-indigo-900 text-white flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">📊</span>
+                    <h3 class="text-base font-bold">Shift Summary & Closing Report</h3>
+                </div>
+                <button onclick="closeShiftReportModal()" class="text-indigo-200 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div class="p-5 space-y-4 overflow-y-auto flex-1 bg-gray-50" id="shiftReportContent"></div>
+
+            <div class="p-3 bg-gray-100 border-t flex justify-between items-center">
+                <button onclick="printShiftReportPDF()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition">
+                    📄 Export PDF Report
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="closeShiftReportModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400">
+                        Cancel
+                    </button>
+                    <button onclick="confirmCloseShift()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-700 transition">
+                        🔚 End Shift
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAYMENT MODAL (for multi-method payments & cash given/change) -->
+    <div id="paymentModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+      <div class="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+        <div class="p-4 border-b bg-indigo-900 text-white flex justify-between items-center">
+          <h3 class="text-base font-bold">💳 Payment</h3>
+          <button onclick="closePaymentModal()" class="text-indigo-200 hover:text-white font-bold text-xl">&times;</button>
+        </div>
+
+        <div class="p-4 space-y-3 overflow-y-auto flex-1 bg-gray-50">
+          <div class="text-xs text-gray-600">
+            Add one or more payment methods. For cash payments enter "Cash Given" to calculate change.
+          </div>
+
+          <div id="paymentRows" class="space-y-2"></div>
+
+          <div class="flex items-center gap-2">
+            <button id="addPaymentRowBtn" onclick="addPaymentRow()" class="bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-indigo-700">+ Add Method</button>
+            <button onclick="clearPaymentRows()" class="bg-gray-200 text-gray-700 px-3 py-1.5 rounded text-xs font-bold hover:bg-gray-300">Clear</button>
+          </div>
+
+          <div class="border-t pt-3 space-y-1 text-sm">
+            <div class="flex justify-between">
+              <span>Total Due:</span>
+              <strong id="paymentTotalDue">Rs 0.00</strong>
+            </div>
+            <div class="flex justify-between">
+              <span>Total Received:</span>
+              <strong id="paymentTotalPaid">Rs 0.00</strong>
+            </div>
+            <div class="flex justify-between">
+              <span>Change to Return:</span>
+              <strong id="paymentChange" class="text-red-600">Rs 0.00</strong>
+            </div>
+            <div id="paymentRemainingRow" class="flex justify-between text-xs text-gray-600">
+              <span>Remaining:</span>
+              <span id="paymentRemaining">Rs 0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-gray-100 border-t flex justify-between items-center">
+          <button onclick="closePaymentModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400">Cancel</button>
+          <button id="confirmPaymentBtn" onclick="confirmPaymentAndProcess()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-emerald-700">Confirm Payment</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STOCK PIN MODAL -->
+    <div id="stockPinModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-xs shadow-2xl space-y-4">
+            <h3 class="text-base font-bold text-gray-800 text-center">Unlock Quick Stock Panel</h3>
+            <p class="text-xs text-gray-500 text-center">Enter PIN to quickly update quantities</p>
+            <input id="stockPinInput" type="password" placeholder="PIN (Default: 1234)" class="w-full p-2 border rounded text-center font-bold text-sm bg-gray-50" />
+            <p id="stockPinError" class="hidden text-xs text-red-600 font-bold text-center">Invalid PIN! Try 1234.</p>
+            <div class="flex gap-2">
+                <button onclick="closeStockPinModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold text-xs hover:bg-gray-300">Cancel</button>
+                <button onclick="submitStockPin()" class="flex-1 bg-amber-600 text-white py-2 rounded font-bold text-xs hover:bg-amber-700">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OWNER AUTH PIN MODAL (for restricted actions like editing a printed bill) -->
+    <div id="ownerAuthModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[60] p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-xs shadow-2xl space-y-4">
+            <h3 class="text-base font-bold text-gray-800 text-center">Owner PIN Required</h3>
+            <p class="text-xs text-gray-500 text-center">Enter owner PIN to authorize editing this order.</p>
+            <input id="ownerAuthPinInput" type="password" placeholder="Owner PIN (Default: 1234)" class="w-full p-2 border rounded text-center font-bold text-sm bg-gray-50" />
+            <p id="ownerAuthError" class="hidden text-xs text-red-600 font-bold text-center">Invalid PIN.</p>
+            <div class="flex gap-2">
+                <button onclick="closeOwnerAuthModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded font-bold text-xs hover:bg-gray-300">Cancel</button>
+                <button onclick="submitOwnerAuth()" class="flex-1 bg-amber-600 text-white py-2 rounded font-bold text-xs hover:bg-amber-700">Authorize</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RAW STOCK INVENTORY MODAL -->
+    <div id="inventoryModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b bg-amber-600 text-white flex justify-between items-center">
+                <h3 class="text-base font-bold">📦 Raw Ingredients & Inventory Management</h3>
+                <button onclick="closeInventoryModal()" class="text-amber-200 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div class="p-4 space-y-4 overflow-y-auto flex-1 bg-gray-50">
+                <div class="bg-white p-3 rounded-xl border shadow-sm space-y-2">
+                    <h4 class="text-xs font-bold text-gray-700">Add New Ingredient</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                        <input id="newItemName" type="text" placeholder="Item Name (e.g. Chicken)" class="p-2 border rounded text-xs" />
+                        <input id="newItemStock" type="number" step="0.01" placeholder="Initial Stock" class="p-2 border rounded text-xs" />
+                        <input id="newItemUnit" type="text" placeholder="Unit (kg, pcs)" class="p-2 border rounded text-xs" />
+                        <input id="newItemCost" type="number" step="0.01" placeholder="Cost per Unit (e.g. 200.00)" class="p-2 border rounded text-xs" />
+                        <button onclick="addNewInventoryItem()" class="bg-amber-600 text-white text-xs font-bold rounded p-2 hover:bg-amber-700">+ Add Ingredient</button>
+                    </div>
+                </div>
+
+                <div id="modalInventoryList" class="space-y-2"></div>
+            </div>
+
+            <div class="p-3 bg-gray-100 border-t text-right">
+                <button onclick="closeInventoryModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OWNER ADMIN MODAL -->
+    <div id="ownerAdminModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b bg-purple-700 text-white flex justify-between items-center">
+                <h3 class="text-base font-bold">👑 Owner Admin Panel</h3>
+                <button onclick="closeOwnerAdminModal()" class="text-purple-200 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div class="p-4 space-y-4 overflow-y-auto flex-1 bg-gray-50">
+                <div class="bg-white p-4 rounded-xl border space-y-3">
+                    <h4 class="text-xs font-bold text-gray-700">1. Manage Food Categories</h4>
+                    <div class="flex gap-2">
+                        <input id="newCatName" type="text" placeholder="Category Name" class="p-2 border rounded text-xs flex-1" />
+                        <button onclick="addCategory()" class="bg-purple-600 text-white text-xs font-bold px-4 py-2 rounded hover:bg-purple-700">+ Add</button>
+                    </div>
+                    <div id="ownerCategoryList" class="flex flex-wrap gap-2 pt-2"></div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border space-y-3">
+                    <h4 class="text-xs font-bold text-gray-700">1b. Instant Item to Cart</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input id="instantItemName" type="text" placeholder="Item name (e.g. Extra Chicken)" class="p-2 border rounded text-xs" />
+                        <input id="instantItemPrice" type="number" step="0.01" min="0" placeholder="Price (Rs)" class="p-2 border rounded text-xs" />
+                        <button onclick="addInstantItemToCart()" class="bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded hover:bg-indigo-700">+ Add to Cart</button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border space-y-3">
+                    <h4 id="foodFormTitle" class="text-xs font-bold text-gray-700">2. Add New Food Item & Link Recipe</h4>
+                    <input id="editFoodId" type="hidden" />
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input id="foodName" type="text" placeholder="Dish Name (e.g. Zinger Burger)" class="p-2 border rounded text-xs" />
+                        <input id="foodPrice" type="number" step="0.01" placeholder="Price (Rs)" class="p-2 border rounded text-xs" />
+                        <select id="foodCategorySelect" class="p-2 border rounded text-xs bg-white"></select>
+                    </div>
+
+                    <div class="border rounded-xl p-3 bg-gray-50 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold text-gray-600">Food Image</span>
+                            <label class="cursor-pointer bg-indigo-600 text-white text-[11px] font-bold px-3 py-1.5 rounded hover:bg-indigo-700">
+                                Upload Photo
+                                <input id="foodImageInput" type="file" accept="image/*" class="hidden" onchange="handleFoodImageUpload(event)" />
+                            </label>
+                        </div>
+                        <div class="flex justify-center">
+                            <img id="foodImagePreview" class="hidden w-28 h-28 object-cover rounded-xl border bg-white shadow-sm" alt="Food preview" />
+                        </div>
+                    </div>
+
+                    <div class="border-t pt-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold text-gray-600">Ingredient Deductions (Recipe):</span>
+                            <button onclick="addRecipeIngredientRow()" class="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded font-bold hover:bg-indigo-100">+ Add Ingredient</button>
+                        </div>
+                        <div id="recipeIngredientRows" class="space-y-2"></div>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="saveFoodItem()" class="flex-1 bg-emerald-600 text-white text-xs font-bold py-2 rounded hover:bg-emerald-700">Save Food Item</button>
+                        <button onclick="resetFoodForm()" class="bg-gray-200 text-gray-700 text-xs font-bold px-4 py-2 rounded hover:bg-gray-300">Reset</button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border space-y-3">
+                    <h4 class="text-xs font-bold text-gray-700">Current Menu List</h4>
+                    <div id="ownerFoodList" class="space-y-2"></div>
+                </div>
+
+                <!-- New: Change Owner PIN Section -->
+                <div class="bg-white p-4 rounded-xl border space-y-3">
+                    <h4 class="text-xs font-bold text-gray-700">3. Change Owner PIN (Requires Owner Password)</h4>
+                    <p class="text-xs text-gray-500">To change the Owner PIN used across the system (stock unlocking / edits), confirm your account password first.</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input id="ownerCurrentPasswordForPin" type="password" placeholder="Enter your account password" class="p-2 border rounded text-xs" />
+                        <input id="ownerNewPin" type="password" placeholder="New PIN (e.g. 4321)" class="p-2 border rounded text-xs" />
+                        <input id="ownerNewPinConfirm" type="password" placeholder="Confirm New PIN" class="p-2 border rounded text-xs" />
+                    </div>
+
+                    <div class="flex gap-2 justify-end">
+                        <button onclick="changeOwnerPin()" class="bg-purple-600 text-white text-xs font-bold px-4 py-2 rounded hover:bg-purple-700">Change Owner PIN</button>
+                    </div>
+
+                    <div id="changePinResult" class="text-xs hidden"></div>
+                </div>
+            </div>
+
+            <div class="p-3 bg-gray-100 border-t text-right">
+                <button onclick="closeOwnerAdminModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DELIVERY MANAGEMENT MODAL -->
+    <div id="deliveryManagementModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b bg-blue-700 text-white flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">🛵</span>
+                    <h3 class="text-base font-bold">Delivery Orders Management</h3>
+                </div>
+                <button onclick="closeDeliveryManagementModal()" class="text-blue-200 hover:text-white font-bold text-xl">&times;</button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="space-y-6">
+                    <!-- PENDING DELIVERIES -->
+                    <div>
+                        <h4 class="text-sm font-bold text-gray-800 bg-yellow-50 p-2 rounded mb-3 border border-yellow-200 flex items-center gap-2">
+                            <span class="text-lg">⏳</span> Pending Deliveries
+                        </h4>
+                        <div id="pendingDeliveriesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                    </div>
+
+                    <!-- ACTIVE DELIVERIES -->
+                    <div>
+                        <h4 class="text-sm font-bold text-gray-800 bg-blue-50 p-2 rounded mb-3 border border-blue-200 flex items-center gap-2">
+                            <span class="text-lg">🛵</span> Active Deliveries
+                        </h4>
+                        <div id="activeDeliveriesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                    </div>
+
+                    <!-- COMPLETED DELIVERIES -->
+                    <div>
+                        <h4 class="text-sm font-bold text-gray-800 bg-emerald-50 p-2 rounded mb-3 border border-emerald-200 flex items-center gap-2">
+                            <span class="text-lg">✅</span> Completed Deliveries
+                        </h4>
+                        <div id="completedDeliveriesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-100 p-4 border-t flex justify-end gap-2">
+                <button onclick="closeDeliveryManagementModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-400 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HIDDEN PDF RECEIPT RENDER TEMPLATE -->
+    <div id="receiptPdfWrapper" class="hidden fixed -top-[9999px] -left-[9999px] w-[300px] bg-white p-4 font-mono text-black">
+        <div class="text-center border-b pb-2 mb-2">
+            <h2 class="font-bold text-lg uppercase">Hungry Birds Restaurant</h2>
+            <p class="text-[10px]">Ph: 0325-7867774</p>
+            <p class="text-[10px]">Main GT Road, Lahore</p>
+        </div>
+        <div id="pdfReceiptMeta" class="text-[10px] space-y-0.5 border-b pb-2 mb-2"></div>
+        <div id="pdfReceiptItems" class="border-b pb-2 mb-2"></div>
+        <div id="pdfReceiptTotals" class="text-right text-[11px] mb-2"></div>
+        <div id="pdfReceiptFooter" class="text-center text-[10px] italic border-t pt-2"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
